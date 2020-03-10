@@ -8,6 +8,7 @@ import (
 	"os"
 	"sync"
 	"time"
+
 	"github.com/VolkovRA/acolor"
 )
 
@@ -324,6 +325,36 @@ func (l *Logger) IsActual(level LogLevel) bool {
 	return l.level >= level
 }
 
+// IsActualError - Проверить актуальность уровня логгирования: ERROR.
+// Возвращает true, если сообщения этого уровня пишутся в журнал.
+func (l *Logger) IsActualError() bool {
+	return l.IsActual(LevelError)
+}
+
+// IsActualWarn - Проверить актуальность уровня логгирования: WARN.
+// Возвращает true, если сообщения этого уровня пишутся в журнал.
+func (l *Logger) IsActualWarn() bool {
+	return l.IsActual(LevelWarn)
+}
+
+// IsActualInfo - Проверить актуальность уровня логгирования: INFO.
+// Возвращает true, если сообщения этого уровня пишутся в журнал.
+func (l *Logger) IsActualInfo() bool {
+	return l.IsActual(LevelInfo)
+}
+
+// IsActualDebug - Проверить актуальность уровня логгирования: DEBUG.
+// Возвращает true, если сообщения этого уровня пишутся в журнал.
+func (l *Logger) IsActualDebug() bool {
+	return l.IsActual(LevelDebug)
+}
+
+// IsActualTrace - Проверить актуальность уровня логгирования: TRACE.
+// Возвращает true, если сообщения этого уровня пишутся в журнал.
+func (l *Logger) IsActualTrace() bool {
+	return l.IsActual(LevelTrace)
+}
+
 // Error - Вывести сообщение об ошибке и завершить работу приложения.
 // Пишет сообщение о фатальной ошибке и вызывает: os.Exit(1).
 func (l *Logger) Error(v ...interface{}) {
@@ -482,4 +513,34 @@ func Debugf(format string, v ...interface{}) {
 // Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: TRACE.
 func Tracef(format string, v ...interface{}) {
 	std.Tracef(format, v...)
+}
+
+// IsActualError - Проверить актуальность уровня логгирования: ERROR.
+// Возвращает true, если сообщения этого уровня пишутся в журнал.
+func IsActualError() bool {
+	return std.IsActualError()
+}
+
+// IsActualWarn - Проверить актуальность уровня логгирования: WARN.
+// Возвращает true, если сообщения этого уровня пишутся в журнал.
+func IsActualWarn() bool {
+	return std.IsActualWarn()
+}
+
+// IsActualInfo - Проверить актуальность уровня логгирования: INFO.
+// Возвращает true, если сообщения этого уровня пишутся в журнал.
+func IsActualInfo() bool {
+	return std.IsActualInfo()
+}
+
+// IsActualDebug - Проверить актуальность уровня логгирования: DEBUG.
+// Возвращает true, если сообщения этого уровня пишутся в журнал.
+func IsActualDebug() bool {
+	return std.IsActualDebug()
+}
+
+// IsActualTrace - Проверить актуальность уровня логгирования: TRACE.
+// Возвращает true, если сообщения этого уровня пишутся в журнал.
+func IsActualTrace() bool {
+	return std.IsActualTrace()
 }
