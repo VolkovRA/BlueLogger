@@ -1,5 +1,6 @@
-// Package log - Цветной логгер.
-// По сути, это обычный golang логгер, только с добавлением уровней логгирования и возможностью цветного оформления текста.
+// Package log расширяет стандартный go логгер для вывода отладочной
+// информации о ходе работы приложения, разделяя его на несколько
+// уровней важности.
 package log
 
 import (
@@ -9,92 +10,141 @@ import (
 	"sync"
 	"time"
 
-	"github.com/VolkovRA/acolor"
+	acolor "github.com/VolkovRA/GoAColor"
 )
 
-// LogLevel - Уровень важности логируемых сообщений.
+// Level описывает уровень важности логируемых сообщений.
+//
 // Необходим для разделения сообщений журнала по уровню важности.
-// Все доступные значения и их описания для применения перечислены в константах пакета.
-type LogLevel int32
+// Все доступные значения и их описание для применения перечислены в
+// соответствующих константах.
+//
+// Возможные значения:
+//
+// - TRACE - Журналы, содержащие наиболее подробные сообщения.
+// Эти сообщения могут содержать конфиденциальные данные приложения.
+// Эти сообщения по умолчанию отключены, и их никогда не следует включать
+// в рабочей среде.
+//
+// - DEBUG - Журналы, используемые для интерактивного исследования во
+// время разработки. Эти журналы в основном содержат сведения, полезные
+// при отладки и не представляющие ценности в долгосрочной перспективе.
+//
+// - INFO - Журналы, отслеживающие общий поток работы приложения.
+// Эти журналы должны быть полезны в долгосрочной перспективе.
+//
+// - WARN - Журналы, которые показывают ненормальное или неожиданное
+// событие в потоке приложения, но не вызывают прекращение выполнения
+// приложения каким-либо образом.
+//
+// - ERROR - Журналы, описывающие неустранимый сбой приложения или системы
+// либо неустранимый сбой, который требует немедленного внимания.
+type Level int32
 
 // Уровни важности логируемых сообщений.
 // Тут перечислены все доступные уровни важности и их описание для применения.
 const (
 
-	// LevelError - Критическая ошибка.
-	// Приложение в критическом состоянии, требуется вмешательство человека.
-	LevelError LogLevel = iota
+	// TRACE - Журналы, содержащие наиболее подробные сообщения.
+	// Эти сообщения могут содержать конфиденциальные данные приложения.
+	// Эти сообщения по умолчанию отключены, и их никогда не следует включать
+	// в рабочей среде.
+	TRACE Level = iota
 
-	// LevelWarn - Предупреждение.
-	// Возникли осложнения, но программа умная и смогла их разрешить самостоятельно.
-	LevelWarn
+	// DEBUG - Журналы, используемые для интерактивного исследования во
+	// время разработки. Эти журналы в основном содержат сведения, полезные
+	// при отладки и не представляющие ценности в долгосрочной перспективе.
+	// Используется по умолчанию.
+	DEBUG
 
-	// LevelInfo - Общая информация.
-	// Что сейчас происходит.
-	LevelInfo
+	// INFO - Журналы, отслеживающие общий поток работы приложения.
+	// Эти журналы должны быть полезны в долгосрочной перспективе.
+	INFO
 
-	// LevelDebug - Отладочные сообщения.
-	// Дополнительная информация, которая может быть полезна для диагностики или отладки.
-	LevelDebug
+	// WARN - Журналы, которые показывают ненормальное или неожиданное
+	// событие в потоке приложения, но не вызывают прекращение выполнения
+	// приложения каким-либо образом.
+	WARN
 
-	// LevelTrace - Всё подряд.
-	// Пишем всё подряд.
-	LevelTrace
+	// ERROR - Журналы, описывающие неустранимый сбой приложения или системы
+	// либо неустранимый сбой, который требует немедленного внимания.
+	ERROR
 )
 
-// Дефолтный логгер
-var std = New(os.Stderr, LevelTrace)
+// Дефолтный логгер.
+var std = New(os.Stderr, DEBUG)
 
-// Logger логгер сообщений.
-// Используется для вывода сообщений в журнал приложения.
-// Вы можете создать новый экземпляр логгера или использовать дефолтный, на уровне пакета.
+// Logger описывает один экземпляр логгера.
+//
+// По умолчанию используется дефолтный экземпляр логгера, ссылку на который
+// Вы можете получить с помощью: log.Default(). Он нацелен на стандартный поток
+// вывода сообщений об ошибках. Вы также можете создать собственный экземпляр
+// логгера и нацелить его на произвольный поток вывода с помощью конструктора:
+// log.New()
 type Logger struct {
 
 	// Цветной текст.
-	// Если true, логгер подкрашивает каждое сообщения.
-	// Работает на основе добавления управляющих ANSI символов, не работает в Windows.
-	// По умолчанию: true.
+	//
+	// Если задано true, к тексту будет применяться раскраска с помощью
+	// управляющих ANSI символов.
+	//
+	// По умолчанию: true
 	Color bool
 
 	// Время в UTC.
-	// Если true, логгер будет использовать нулевой часовой пояс, установленный в локальной системе.
+	//
+	// Если true, логгер будет использовать нулевой часовой пояс, установленный
+	// в локальной системе.
+	//
 	// По умолчанию: true.
 	UTC bool
 
 	// Отображение заголовка. (Целиком)
-	// Если true, логгер добавляет в каждое сообщение заголовок с системной информацией: время, уровень важности и т.п.
+	//
+	// Если true, логгер добавляет в каждое сообщение заголовок с системной
+	// информацией: время, уровень важности и т.п.
+	//
 	// По умолчанию: true.
 	Head bool
 
 	// Отображение уровня важности в заголовке.
-	// Если true, в заголовке каждого сообщения будет присутствовать маркер уровня важности данного сообщения: [LEVEL].
+	//
+	// Если true, в заголовке каждого сообщения будет присутствовать маркер
+	// уровня важности данного сообщения: [LEVEL].
+	//
 	// По умолчанию: true.
 	HeadLevel bool
 
 	// Отображение даты в заголовке.
+	//
 	// Если true, в заголовке каждого сообщения будет присутствовать дата: DD.MM.YYYY.
+	//
 	// По умолчанию: true.
 	HeadDate bool
 
 	// Отображение времени в заголовке.
+	//
 	// Если true, в заголовке каждого сообщения будет присутствовать время: HH:MM:SS.
+	//
 	// По умолчанию: true.
 	HeadTime bool
 
 	// Отображение микросекунд в заголовке. (Работает только при включенном HeadTime)
+	//
 	// Если true, в заголовке каждого сообщения будут присутствовать микросекунды: HH:MM:SS.000000
+	//
 	// По умолчанию: false.
 	HeadMC bool
 
 	mu    sync.Mutex // Атомарная запись.
 	out   io.Writer  // Назначение для вывода сообщений.
-	level LogLevel   // Уровень логируемых сообщений.
+	level Level      // Уровень логируемых сообщений.
 	buf   []byte     // Буфер для сложения текста при записи.
 }
 
 // New создаёт новый логгер.
 // Вы можете указать цель назначения всех сообщений журнала.
-func New(out io.Writer, level LogLevel) *Logger {
+func New(out io.Writer, level Level) *Logger {
 	return &Logger{
 		out:       out,
 		level:     level,
@@ -115,7 +165,7 @@ func Default() *Logger {
 }
 
 // Записать заголовки сообщения.
-func (l *Logger) writeHeader(buf *[]byte, level LogLevel) {
+func (l *Logger) writeHeader(buf *[]byte, level Level) {
 
 	// Метка уровня:
 	if l.HeadLevel {
@@ -124,7 +174,7 @@ func (l *Logger) writeHeader(buf *[]byte, level LogLevel) {
 
 	// Цвет заголовка:
 	if l.Color {
-		if level == LevelError {
+		if level == ERROR {
 			*buf = append(*buf, acolor.Apply(acolor.Red)...)
 		} else {
 			*buf = append(*buf, acolor.Apply(acolor.BlackHi)...)
@@ -180,36 +230,32 @@ func (l *Logger) writeHeader(buf *[]byte, level LogLevel) {
 }
 
 // Получить метку уровня логирования.
-func (l *Logger) getHeaderLevel(level LogLevel) string {
+func (l *Logger) getHeaderLevel(level Level) string {
 	if l.Color {
 		switch level {
-		case LevelInfo:
+		case INFO:
 			return acolor.Apply(acolor.Bold, acolor.Green) + "[INFO]  " + acolor.Clear()
-		case LevelWarn:
+		case WARN:
 			return acolor.Apply(acolor.Bold, acolor.Yellow) + "[WARN]  " + acolor.Clear()
-		case LevelTrace:
+		case TRACE:
 			return acolor.Apply(acolor.Bold, acolor.White) + "[TRACE] " + acolor.Clear()
-		case LevelDebug:
+		case DEBUG:
 			return acolor.Apply(acolor.Bold, acolor.Cyan) + "[DEBUG] " + acolor.Clear()
-		case LevelError:
-			return acolor.Apply(acolor.Bold, acolor.Red) + "[ERROR] " + acolor.Clear()
 		default:
-			return acolor.Apply(acolor.Bold, acolor.White) + "[]      " + acolor.Clear()
+			return acolor.Apply(acolor.Bold, acolor.Red) + "[ERROR] " + acolor.Clear()
 		}
 	} else {
 		switch level {
-		case LevelInfo:
+		case INFO:
 			return "[INFO]  "
-		case LevelWarn:
+		case WARN:
 			return "[WARN]  "
-		case LevelTrace:
+		case TRACE:
 			return "[TRACE] "
-		case LevelDebug:
+		case DEBUG:
 			return "[DEBUG] "
-		case LevelError:
-			return "[ERROR] "
 		default:
-			return "[]      "
+			return "[ERROR] "
 		}
 	}
 }
@@ -230,7 +276,7 @@ func itoa(buf *[]byte, i int, wid int) {
 }
 
 // Записать сообщение в журнал.
-func (l *Logger) write(level LogLevel, v ...interface{}) error {
+func (l *Logger) write(level Level, v ...interface{}) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -241,7 +287,7 @@ func (l *Logger) write(level LogLevel, v ...interface{}) error {
 	}
 
 	// Тело:
-	if l.Color && level == LevelError {
+	if l.Color && level == ERROR {
 		l.buf = append(l.buf, (acolor.Apply(acolor.Red) + fmt.Sprint(v...) + acolor.Clear() + "\n")...)
 	} else {
 		l.buf = append(l.buf, (fmt.Sprint(v...) + "\n")...)
@@ -253,54 +299,22 @@ func (l *Logger) write(level LogLevel, v ...interface{}) error {
 	return err
 }
 
-// Записать сообщение в журнал с применением форматирования.
-func (l *Logger) writef(level LogLevel, format string, v ...interface{}) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	// Шапка:
-	l.buf = l.buf[:0]
-	if l.Head {
-		l.writeHeader(&l.buf, level)
-	}
-
-	// Тело:
-	if l.Color && level == LevelError {
-		l.buf = append(l.buf, (acolor.Apply(acolor.Red) + fmt.Sprintf(format, v...) + acolor.Clear() + "\n")...)
-	} else {
-		l.buf = append(l.buf, (fmt.Sprintf(format, v...) + "\n")...)
-	}
-
-	// Вывод:
-	_, err := l.out.Write(l.buf)
-
-	return err
-}
-
-// Level уровень важности логируемых сообщений.
+// Level указывает текущий уровень важности логируемых сообщений.
+//
 // Если сообщение не соответствует уровню важности, оно не попадает в журнал.
+//
 // По умолчанию: LevelTrace. (В журнал попадают все сообщения)
-func (l *Logger) Level() LogLevel {
+func (l *Logger) Level() Level {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.level
 }
 
 // SetLevel устанавливает уровень важности логируемых сообщений.
-// Доступные значения LogLevel смотрите в константах пакета.
-func (l *Logger) SetLevel(level LogLevel) {
+// Доступные значения Level смотрите в константах пакета.
+func (l *Logger) SetLevel(level Level) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-
-	if level < LevelError {
-		l.level = LevelError
-		return
-	}
-	if level > LevelTrace {
-		l.level = LevelTrace
-		return
-	}
-
 	l.level = level
 }
 
@@ -319,139 +333,101 @@ func (l *Logger) SetOutput(w io.Writer) {
 	l.out = w
 }
 
-// IsLevel проверяет актуальность уровня логирования.
-// Возвращает true, если указанный уровень логирования пишется в журнал.
-func (l *Logger) IsLevel(level LogLevel) bool {
-	return l.level >= level
+// IsLevel проверяет актуальность указанного уровня логирования.
+//
+// Это полезно, если вам нужно проверить, выводится для в данный
+// момент указанный уровень логируемых сообщений. Например, перед
+// выполнение дорогой операции для создания сообщения для лога.
+//
+// Возвращает true, если указанный уровень логирования актуален.
+func (l *Logger) IsLevel(level Level) bool {
+	return level >= l.level
 }
 
-// IsError проверяет актуальность уровня логгирования: ERROR.
+// IsError проверяет актуальность уровня логирования: ERROR.
 // Возвращает true, если сообщения этого уровня пишутся в журнал.
 func (l *Logger) IsError() bool {
-	return l.IsLevel(LevelError)
+	return l.IsLevel(ERROR)
 }
 
-// IsWarn проверяет актуальность уровня логгирования: WARN.
+// IsWarn проверяет актуальность уровня логирования: WARN.
 // Возвращает true, если сообщения этого уровня пишутся в журнал.
 func (l *Logger) IsWarn() bool {
-	return l.IsLevel(LevelWarn)
+	return l.IsLevel(WARN)
 }
 
-// IsInfo проверяет актуальность уровня логгирования: INFO.
+// IsInfo проверяет актуальность уровня логирования: INFO.
 // Возвращает true, если сообщения этого уровня пишутся в журнал.
 func (l *Logger) IsInfo() bool {
-	return l.IsLevel(LevelInfo)
+	return l.IsLevel(INFO)
 }
 
-// IsDebug проверяет актуальность уровня логгирования: DEBUG.
+// IsDebug проверяет актуальность уровня логирования: DEBUG.
 // Возвращает true, если сообщения этого уровня пишутся в журнал.
 func (l *Logger) IsDebug() bool {
-	return l.IsLevel(LevelDebug)
+	return l.IsLevel(DEBUG)
 }
 
-// IsTrace проверяет актуальность уровня логгирования: TRACE.
+// IsTrace проверяет актуальность уровня логирования: TRACE.
 // Возвращает true, если сообщения этого уровня пишутся в журнал.
 func (l *Logger) IsTrace() bool {
-	return l.IsLevel(LevelTrace)
+	return l.IsLevel(TRACE)
 }
 
 // Error выводит сообщение об ошибке и завершает работу приложения.
 // Пишет сообщение о фатальной ошибке и вызывает: os.Exit(1).
 func (l *Logger) Error(v ...interface{}) {
-	l.write(LevelError, v...)
+	if ERROR < l.level {
+		return
+	}
+
+	l.write(ERROR, v...)
 	os.Exit(1)
 }
 
 // Warn выводит предупреждение.
 // Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: WARN.
 func (l *Logger) Warn(v ...interface{}) {
-	if l.level < LevelWarn {
+	if WARN < l.level {
 		return
 	}
 
-	l.write(LevelWarn, v...)
+	l.write(WARN, v...)
 }
 
 // Info выводит информационное сообщение.
 // Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: INFO.
 func (l *Logger) Info(v ...interface{}) {
-	if l.level < LevelInfo {
+	if INFO < l.level {
 		return
 	}
 
-	l.write(LevelInfo, v...)
+	l.write(INFO, v...)
 }
 
 // Debug выводит отладочное сообщение.
 // Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: DEBUG.
 func (l *Logger) Debug(v ...interface{}) {
-	if l.level < LevelDebug {
+	if DEBUG < l.level {
 		return
 	}
 
-	l.write(LevelDebug, v...)
+	l.write(DEBUG, v...)
 }
 
 // Trace выводит произвольное сообщение.
 // Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: TRACE.
 func (l *Logger) Trace(v ...interface{}) {
-	if l.level < LevelTrace {
+	if TRACE < l.level {
 		return
 	}
 
-	l.write(LevelTrace, v...)
-}
-
-// Errorf выводит сообщение об ошибке с применением форматирования и завершает работу приложения.
-// Пишет сообщение о фатальной ошибке и вызывает: os.Exit(1).
-func (l *Logger) Errorf(format string, v ...interface{}) {
-	l.writef(LevelError, format, v...)
-	os.Exit(1)
-}
-
-// Warnf выводит предупреждение с применением форматирования.
-// Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: WARN.
-func (l *Logger) Warnf(format string, v ...interface{}) {
-	if l.level < LevelWarn {
-		return
-	}
-
-	l.writef(LevelWarn, format, v...)
-}
-
-// Infof выводит информационное сообщение с применением форматирования.
-// Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: INFO.
-func (l *Logger) Infof(format string, v ...interface{}) {
-	if l.level < LevelInfo {
-		return
-	}
-
-	l.writef(LevelInfo, format, v...)
-}
-
-// Debugf выводит отладочное сообщение с применением форматирования.
-// Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: DEBUG.
-func (l *Logger) Debugf(format string, v ...interface{}) {
-	if l.level < LevelDebug {
-		return
-	}
-
-	l.writef(LevelDebug, format, v...)
-}
-
-// Tracef выводит произвольное сообщение с применением форматирования.
-// Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: TRACE.
-func (l *Logger) Tracef(format string, v ...interface{}) {
-	if l.level < LevelTrace {
-		return
-	}
-
-	l.writef(LevelTrace, format, v...)
+	l.write(TRACE, v...)
 }
 
 // IsLevel проверяет актуальность уровня логирования.
 // Возвращает true, если указанный уровень логирования пишется в журнал.
-func IsLevel(level LogLevel) bool {
+func IsLevel(level Level) bool {
 	return std.IsLevel(level)
 }
 
@@ -485,61 +461,31 @@ func Trace(v ...interface{}) {
 	std.Trace(v...)
 }
 
-// Errorf выводит сообщение об ошибке и завершает работу приложения с применением форматирования.
-// Пишет сообщение о фатальной ошибке и вызывает: os.Exit(1).
-func Errorf(format string, v ...interface{}) {
-	std.Errorf(format, v...)
-}
-
-// Warnf выводит предупреждение с применением форматирования.
-// Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: WARN.
-func Warnf(format string, v ...interface{}) {
-	std.Warnf(format, v...)
-}
-
-// Infof выводит информационное сообщение с применением форматирования.
-// Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: INFO.
-func Infof(format string, v ...interface{}) {
-	std.Infof(format, v...)
-}
-
-// Debugf выводит отладочное сообщение с применением форматирования.
-// Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: DEBUG.
-func Debugf(format string, v ...interface{}) {
-	std.Debugf(format, v...)
-}
-
-// Tracef выводит произвольное сообщение с применением форматирования.
-// Вызов игнорируется, если уровень важности логируемых сообщений не соответствует: TRACE.
-func Tracef(format string, v ...interface{}) {
-	std.Tracef(format, v...)
-}
-
-// IsError проверяет актуальность уровня логгирования: ERROR.
+// IsError проверяет актуальность уровня логирования: ERROR.
 // Возвращает true, если сообщения этого уровня пишутся в журнал.
 func IsError() bool {
 	return std.IsError()
 }
 
-// IsWarn проверяет актуальность уровня логгирования: WARN.
+// IsWarn проверяет актуальность уровня логирования: WARN.
 // Возвращает true, если сообщения этого уровня пишутся в журнал.
 func IsWarn() bool {
 	return std.IsWarn()
 }
 
-// IsInfo проверяет актуальность уровня логгирования: INFO.
+// IsInfo проверяет актуальность уровня логирования: INFO.
 // Возвращает true, если сообщения этого уровня пишутся в журнал.
 func IsInfo() bool {
 	return std.IsInfo()
 }
 
-// IsDebug проверяет актуальность уровня логгирования: DEBUG.
+// IsDebug проверяет актуальность уровня логирования: DEBUG.
 // Возвращает true, если сообщения этого уровня пишутся в журнал.
 func IsDebug() bool {
 	return std.IsDebug()
 }
 
-// IsTrace проверяет актуальность уровня логгирования: TRACE.
+// IsTrace проверяет актуальность уровня логирования: TRACE.
 // Возвращает true, если сообщения этого уровня пишутся в журнал.
 func IsTrace() bool {
 	return std.IsTrace()
